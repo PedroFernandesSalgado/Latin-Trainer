@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Latin Trainer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2433'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='Georgia,serif'%3EL%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light dark;
+  --page:       light-dark(#e8ebee, #0e1013);
+  --bg:         light-dark(#f5f6f8, #14171c);
+  --surface:    light-dark(#ffffff, #1c2027);
+  --ink:        light-dark(#171b22, #e8eaee);
+  --muted:      light-dark(#5c6470, #9aa2ae);
+  --line:       light-dark(#d3d8df, #2f353f);
+  --ok:         light-dark(#2c6a4c, #7cc3a0);
+  --ok-line:    light-dark(#a9c9b8, #3b5a4a);
+  --bad:        light-dark(#a23b3b, #e58f8f);
+  --bad-bg:     light-dark(#fbefef, #2c1c1e);
+  --primary:    light-dark(#1c2433, #e8eaee);
+  --primary-ink:light-dark(#ffffff, #14171c);
+  --focus:      light-dark(#3b6fd4, #7aa2f0);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.4 var(--sans);
+  display: grid;
+  place-items: center;
+  -webkit-text-size-adjust: 100%;
+}
+button { font: inherit; color: inherit; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* ---------- layout: fills a phone or a 1:1 window, becomes a panel on large screens ---------- */
+.app {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+}
+@media (min-width: 640px) and (min-height: 700px) {
+  body { background: var(--page); }
+  .app {
+    width: 560px;
+    height: min(calc(100dvh - 48px), 680px);
+    padding-top: 0;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+}
+
+.top { display: flex; align-items: center; gap: 8px; padding: 10px 14px; min-height: 52px; }
+.brand { margin: 0 auto 0 0; font: 600 1.05rem/1 var(--serif); letter-spacing: .01em; }
+.pill {
+  background: transparent; border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 12px; font-size: .82rem; color: var(--muted); cursor: pointer;
+}
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; font-size: 1.35rem; line-height: 1; cursor: pointer; color: var(--muted);
+}
+.icon-btn:hover, .pill:hover { border-color: var(--line); color: var(--ink); }
+
+.stage {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 14px 10px;
+}
+
+/* ---------- the prompt ---------- */
+.card {
+  flex: 1 1 auto;
+  display: grid; place-items: center; text-align: center;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.prompt {
+  margin: 0;
+  font: 500 clamp(2.1rem, 10vmin, 3.4rem)/1.15 var(--serif);
+  overflow-wrap: anywhere;
+}
+.prompt.message { font: 400 1rem/1.5 var(--sans); color: var(--muted); max-width: 34ch; }
+.prompt.message strong { display: block; color: var(--ink); margin-bottom: 4px; font-weight: 600; }
+.stage[data-phase="reveal"] .card { flex: 0 0 auto; padding: 10px 16px; }
+.stage[data-phase="reveal"] .prompt { font-size: clamp(1.45rem, 6.5vmin, 2rem); }
+
+/* ---------- the answer ---------- */
+.answers {
+  flex: 1 1 0; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 2px;
+  animation: appear .14s ease-out;
+}
+@keyframes appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.hint { margin: 0; font-size: .82rem; color: var(--muted); }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.glabel { flex: 1 0 100%; margin: 0 0 -2px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+
+.entry {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;
+  padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 12px;
+}
+.ecap { flex: 1 0 100%; margin: 0; font-size: .8rem; font-weight: 600; color: var(--muted); }
+
+.chip {
+  appearance: none; display: inline-flex; align-items: flex-start; gap: 8px;
+  max-width: 100%; min-height: 42px; padding: 9px 12px;
+  text-align: left; cursor: pointer; touch-action: manipulation;
+  background: var(--surface);
+  border: 1.5px solid var(--ok-line);
+  border-radius: 10px;
+  transition: background-color .1s, border-color .1s;
+}
+.chip .mark { flex: none; width: 1.1em; text-align: center; font-weight: 700; color: var(--ok); }
+.chip[data-state="miss"] { background: var(--bad-bg); border-color: var(--bad); }
+.chip[data-state="miss"] .mark { color: var(--bad); }
+.chip.latin .txt { font-family: var(--serif); font-size: 1.08rem; }
+.chip:active { transform: scale(.98); }
+
+/* ---------- actions & footer ---------- */
+.actions { display: flex; gap: 10px; padding: 8px 14px calc(12px + var(--safe-bottom)); }
+.btn {
+  min-height: 52px; border-radius: 12px; border: 1.5px solid var(--line);
+  background: transparent; font-weight: 600; cursor: pointer; touch-action: manipulation;
+}
+.btn.secondary { flex: 1; }
+.btn.primary { flex: 2; background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.btn:active { transform: scale(.985); }
+.btn[disabled] { opacity: .45; cursor: default; }
+
+.foot { display: flex; justify-content: center; gap: 18px; padding: 0 14px 12px; font-size: .78rem; color: var(--muted); }
+.foot a { text-underline-offset: 2px; }
+
+/* ---------- 1:1 and other short windows ---------- */
+@media (max-height: 480px) {
+  .top { min-height: 40px; padding: 5px 12px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .stage { gap: 8px; padding: 2px 12px 6px; }
+  .card { padding: 10px; }
+  .stage[data-phase="reveal"] .card { padding: 6px 12px; }
+  .hint { display: none; }
+  .answers { gap: 8px; }
+  .group { gap: 6px; align-items: center; }
+  .glabel, .ecap { flex: 0 0 auto; margin: 0 2px 0 0; font-size: .76rem; }
+  .entry { gap: 6px; align-items: center; padding: 6px 8px; }
+  .chip { min-height: 36px; padding: 6px 10px; font-size: .92rem; }
+  .actions { padding: 6px 12px calc(8px + var(--safe-bottom)); }
+  .btn { min-height: 44px; }
+}
+@media (max-height: 600px) { .foot { display: none; } }
+
+/* ---------- menu dialog ---------- */
+dialog {
+  width: min(92vw, 460px); max-height: 88dvh; padding: 0;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 16px;
+}
+dialog::backdrop { background: rgb(0 0 0 / .4); }
+.dlg { padding: 16px 18px 18px; max-height: 88dvh; overflow-y: auto; }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.dlg h2 { margin: 0; font: 600 1.15rem var(--serif); }
+.dlg h3 { margin: 18px 0 8px; font-size: .9rem; font-weight: 600; }
+.dlg p { margin: 6px 0; }
+.small { font-size: .85rem; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.stat b { display: block; font: 600 1.35rem var(--serif); }
+.stat span { font-size: .8rem; color: var(--muted); }
+.weak { margin: 6px 0 0; padding: 0; list-style: none; font-size: .9rem; }
+.weak li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.weak li span:last-child { color: var(--muted); white-space: nowrap; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 7px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-ink); }
+.dbtn { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+.dbtn.danger { color: var(--bad); }
+.status { min-height: 1.3em; font-size: .85rem; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .answers { animation: none; }
+  .chip { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <h1 class="brand">Latin Trainer</h1>
+    <button class="pill" id="due" type="button" aria-label="Open statistics"></button>
+    <button class="icon-btn" id="menu-btn" type="button" aria-label="Menu">&#8943;</button>
+  </header>
+
+  <main class="stage" id="stage" data-phase="loading">
+    <section class="card" id="card" aria-live="polite">
+      <p class="prompt message" id="prompt">Loading vocabulary…</p>
+    </section>
+    <section class="answers" id="answers" hidden aria-label="Answer"></section>
+  </main>
+
+  <div class="actions">
+    <button class="btn secondary" id="skip" type="button" disabled>Skip</button>
+    <button class="btn primary" id="main" type="button" disabled>Reveal</button>
+  </div>
+
+  <footer class="foot">
+    <a id="repo-link" href="#" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/PedroFernandesSalgado/VulgateDict" target="_blank" rel="noopener">Data: VulgateDict</a>
+  </footer>
+</div>
+
+<dialog id="menu" aria-label="Menu"></dialog>
+
+<script>
+(() => {
+"use strict";
+
+/* ====================== configuration ====================== */
+const REPO_URL = "https://github.com/YOUR-NAME/latin-trainer";   // <- put your repository here
+const DATA_URL = "lexemes.json";
+const STORE = "latintrainer:";
+const VERSION = "0.1";
+const DAY = 86400000;
+// Spaced-repetition boxes, in days. Box 0 = just missed (back in 10 minutes).
+const INTERVALS = [10 / 1440, 1, 3, 7, 16, 35, 90, 180];
+const MAX_ENTRIES = 3;   // how many words sharing one spelling are shown together
+const GROUPS = [["pp", "Dictionary entry"], ["form", "This form"], ["meaning", "Meaning"]];
+
+/* ====================== labels for grammar tags ====================== */
+const T = {
+  act: "active", pass: "passive", ind: "indicative", subj: "subjunctive", imp: "imperative", inf: "infinitive",
+  pres: "present", imperf: "imperfect", fut: "future", perf: "perfect", plup: "pluperfect", futperf: "future perfect",
+  sg: "singular", pl: "plural",
+  nom: "nominative", gen: "genitive", dat: "dative", acc: "accusative", abl: "ablative", voc: "vocative", loc: "locative",
+  masc: "masculine", fem: "feminine", neut: "neuter", supine: "supine", gerund: "gerund"
+};
+const ORDINAL = { 1: "1st", 2: "2nd", 3: "3rd" };
+const POS = {
+  adj_comp: "comparative adjective", adj_sup: "superlative adjective", adj_pos: "adjective",
+  adv_comp: "comparative adverb", adv_sup: "superlative adverb", adv_pos: "adverb"
+};
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function tagLabel(tag) {
+  const words = [], persons = [];
+  for (const tok of tag.split("_")) {
+    const m = /^([123])(sg|pl)$/.exec(tok);
+    if (m) persons.push(`${ORDINAL[m[1]]} person ${T[m[2]]}`);
+    else words.push(T[tok] || tok);
+  }
+  const out = [];
+  if (words.length) out.push(words.join(" "));
+  return out.concat(persons).join(", ");
+}
+function posLabel(pos) {
+  if (POS[pos]) return POS[pos];
+  const m = /^part_(act|pass|dep)_(pres|perf|fut)$/.exec(pos);
+  if (m) {
+    const voice = { act: "active", pass: "passive", dep: "deponent" }[m[1]];
+    return `${T[m[2]]} ${voice} participle` + (m[1] === "pass" && m[2] === "fut" ? " (gerundive)" : "");
+  }
+  return pos.replace(/_/g, " ");
+}
+
+const LEX_POS = {
+  verb: "Verb", prep: "Preposition", conj: "Conjunction", interj: "Interjection", pron: "Pronoun",
+  hebrew: "Hebrew word", adj_pos: "Adjective", adj_comp: "Comparative adjective", adj_sup: "Superlative adjective",
+  adv_pos: "Adverb", adv_comp: "Comparative adverb"
+};
+const NUM = { card: "cardinal", ord: "ordinal", distr: "distributive", plur: "plural", mult: "multiplicative", prop: "proportional" };
+function lexLabel(pos) {
+  if (LEX_POS[pos]) return LEX_POS[pos];
+  let m = /^noun_(.+)$/.exec(pos);
+  if (m) return cap(m[1].split("_").map((g) => T[g] || g).join("/")) + " noun";
+  m = /^num_([a-z]+)/.exec(pos);
+  if (m) return cap((NUM[m[1]] || m[1]) + " numeral");
+  return cap(pos.replace(/_/g, " ").trim());
+}
+
+/* ====================== storage ====================== */
+const mem = {};
+let storageOk = true;
+function load(key, fallback) {
+  try { const v = localStorage.getItem(STORE + key); return v ? JSON.parse(v) : fallback; }
+  catch { return key in mem ? mem[key] : fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(STORE + key, JSON.stringify(value)); }
+  catch { mem[key] = value; storageOk = false; }
+}
+try { localStorage.setItem(STORE + "probe", "1"); localStorage.removeItem(STORE + "probe"); }
+catch { storageOk = false; }
+
+/* ====================== state ====================== */
+let byId = new Map();
+let byForm = new Map();             // spelling -> [{lex, form}, ...] (all words that contain it)
+let candidates = [];                // lexemes that can be asked about
+let log = load("log", []);          // immutable review history (source of truth)
+let settings = Object.assign({ targets: 5, theme: "auto" }, load("settings", {}));
+let state = {};                     // derived from the log: component id -> {box, due, ok, miss}
+let current = null;                 // the exercise on screen
+let lastKey = null;
+let persistAsked = false;
+
+/* ====================== scheduler ====================== */
+function applyReview(st, r) {
+  for (const local of r.s) {
+    const id = r.l + "|" + local;
+    const s = st[id] || (st[id] = { box: 0, due: 0, ok: 0, miss: 0 });
+    if (r.m.includes(local)) { s.miss++; s.box = 0; }
+    else { s.ok++; s.box = Math.min(s.box + 1, INTERVALS.length - 1); }
+    s.due = r.t + INTERVALS[s.box] * DAY;
+  }
+}
+function rebuildState() {
+  state = {};
+  log.slice().sort((a, b) => a.t - b.t).forEach((r) => applyReview(state, r));
+}
+function splitId(id) { const i = id.indexOf("|"); return [id.slice(0, i), id.slice(i + 1)]; }
+function dueIds(now = Date.now()) {
+  return Object.keys(state).filter((id) => state[id].due <= now && byId.has(splitId(id)[0]));
+}
+
+/* ====================== exercise generation ====================== */
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// All things that could be asked for one (lexeme, form) pair.
+function buildPool(lex, form) {
+  const pool = [];
+  for (const p of lex.parts)
+    if (p.text && p.text !== form.text) pool.push({ local: "pp/" + p.key, group: "pp", text: p.text });
+  for (const r of form.readings) {
+    const base = r.pos ? posLabel(r.pos) : null;
+    if (!r.tags.length) {
+      if (base) pool.push({ local: `form/${form.text}/${r.pos}/`, group: "form", text: cap(base) });
+      continue;
+    }
+    for (const tag of r.tags) {
+      const label = tagLabel(tag);
+      pool.push({
+        local: `form/${form.text}/${r.pos || ""}/${tag}`,
+        group: "form",
+        text: cap(base ? `${base}, ${label}` : label)
+      });
+    }
+  }
+  for (const m of lex.translations) pool.push({ local: "meaning/" + m, group: "meaning", text: m });
+  return pool.map((t, i) => Object.assign(t, { id: lex.id + "|" + t.local, order: i, missed: false }));
+}
+
+const groupRank = (t) => GROUPS.findIndex((g) => g[0] === t.group);
+
+// Due-and-seen first, then never-seen, then not-yet-due; random within each band.
+function byPriority(targets) {
+  const now = Date.now();
+  const seen = (t) => state[t.id];
+  return shuffle(targets.filter((t) => seen(t) && state[t.id].due <= now)).concat(
+    shuffle(targets.filter((t) => !seen(t))),
+    shuffle(targets.filter((t) => seen(t) && state[t.id].due > now)));
+}
+
+// One exercise = one spelling. If several words share it, each gets its own block.
+function makeExercise(text, primary, seedId) {
+  const others = shuffle((byForm.get(text) || []).filter((c) => c.lex !== primary.lex));
+  const entries = [primary, ...others].slice(0, MAX_ENTRIES)
+    .map((e) => ({ lex: e.lex, form: e.form, pool: buildPool(e.lex, e.form) }))
+    .filter((e) => e.pool.length);
+  if (!entries.length) return null;
+  entries.forEach((e) => e.pool.forEach((t) => { t.entry = e; }));
+  const all = entries.flatMap((e) => e.pool);
+  const seed = seedId ? all.find((t) => t.id === seedId) : null;
+  if (seedId && !seed) return null;
+
+  const n = Math.max(settings.targets, entries.length);
+  const chosen = [];
+  const take = (t) => { if (t && !chosen.includes(t)) chosen.push(t); };
+  take(seed);
+  if (entries.length > 1) {                       // every shown word gets at least one item
+    for (const e of entries) {
+      if (chosen.some((t) => t.entry === e)) continue;
+      const ordered = byPriority(e.pool);
+      take(ordered.find((t) => t.group === "pp") || ordered[0]);
+    }
+  }
+  for (const t of byPriority(all)) { if (chosen.length >= n) break; take(t); }
+
+  const shown = entries.map((e) => ({
+    lex: e.lex, form: e.form,
+    targets: chosen.filter((t) => t.entry === e).sort((a, b) => groupRank(a) - groupRank(b) || a.order - b.order)
+  })).filter((e) => e.targets.length);
+  return { key: text, text, entries: shown, targets: shown.flatMap((e) => e.targets), revealed: false };
+}
+
+function exerciseForComponent(id) {
+  const [lexId, local] = splitId(id);
+  const lex = byId.get(lexId);
+  if (!lex) return null;
+  let forms;
+  if (local.startsWith("form/")) {
+    const f = lex.forms.find((x) => x.text === local.split("/")[1]);
+    forms = f ? [f] : [];
+  } else forms = shuffle(lex.forms.slice());
+  for (const f of forms) { const ex = makeExercise(f.text, { lex, form: f }, id); if (ex) return ex; }
+  return null;
+}
+
+function nextExercise() {
+  // 1) things that are due, most overdue first (with a little randomness)
+  const due = dueIds().sort((a, b) => state[a].due - state[b].due);
+  const tried = new Set();
+  while (tried.size < Math.min(due.length, 30)) {
+    const left = due.filter((d) => !tried.has(d));
+    const pick = left[Math.floor(Math.random() * Math.min(10, left.length))];
+    tried.add(pick);
+    const ex = exerciseForComponent(pick);
+    if (ex && ex.key !== lastKey) return ex;
+  }
+  // 2) otherwise something new
+  for (let i = 0; i < 200 && candidates.length; i++) {
+    const lex = candidates[Math.floor(Math.random() * candidates.length)];
+    const form = lex.forms[Math.floor(Math.random() * lex.forms.length)];
+    const ex = makeExercise(form.text, { lex, form }, null);
+    if (ex && ex.key !== lastKey) return ex;
+  }
+  return null;
+}
+
+/* ====================== DOM helpers ====================== */
+const $ = (s) => document.querySelector(s);
+function h(tag, props = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, "");
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) el.append(kid);
+  return el;
+}
+const els = {
+  stage: $("#stage"), card: $("#card"), prompt: $("#prompt"), answers: $("#answers"),
+  skip: $("#skip"), main: $("#main"), due: $("#due"), menuBtn: $("#menu-btn"), dlg: $("#menu")
+};
+
+/* ====================== rendering ====================== */
+function setPhase(p) { els.stage.dataset.phase = p; }
+
+function showMessage(title, detail) {
+  current = null;
+  setPhase("error");
+  els.prompt.className = "prompt message";
+  els.prompt.replaceChildren(h("strong", {}, title), detail);
+  els.answers.hidden = true;
+  els.skip.disabled = els.main.disabled = true;
+}
+
+function renderAsk() {
+  setPhase("ask");
+  els.prompt.className = "prompt latin";
+  els.prompt.lang = "la";
+  els.prompt.textContent = current.text;
+  els.answers.hidden = true;
+  els.answers.replaceChildren();
+  els.skip.disabled = els.main.disabled = false;
+  els.main.textContent = "Reveal";
+  updateDue();
+}
+
+function renderChip(t) {
+  const mark = h("span", { class: "mark", "aria-hidden": "true" }, "✓");
+  const chip = h("button", { class: "chip" + (t.group === "pp" ? " latin" : ""), type: "button", "data-state": "ok" },
+    mark, h("span", { class: "txt" }, t.text));
+  const sync = () => {
+    chip.dataset.state = t.missed ? "miss" : "ok";
+    mark.textContent = t.missed ? "✗" : "✓";
+    chip.setAttribute("aria-label", `${t.text}: ${t.missed ? "missed" : "known"}. Tap to change.`);
+  };
+  t.toggle = () => { t.missed = !t.missed; sync(); };
+  chip.addEventListener("click", t.toggle);
+  sync();
+  return chip;
+}
+
+function renderReveal() {
+  setPhase("reveal");
+  const box = els.answers;
+  const many = current.entries.length > 1;
+  box.replaceChildren(h("p", { class: "hint" }, many
+    ? "This spelling belongs to more than one word. Everything starts as known; tap what you missed."
+    : "Everything starts as known. Tap what you missed."));
+  if (!many) {
+    const ts = current.entries[0].targets;
+    for (const [key, label] of GROUPS) {
+      const group = ts.filter((t) => t.group === key);
+      if (!group.length) continue;
+      box.append(h("div", { class: "group", role: "group", "aria-label": label },
+        h("p", { class: "glabel" }, label), group.map(renderChip)));
+    }
+  } else {
+    for (const e of current.entries) {
+      const label = lexLabel(e.lex.pos);
+      box.append(h("div", { class: "entry", role: "group", "aria-label": label },
+        h("p", { class: "ecap" }, label), e.targets.map(renderChip)));
+    }
+  }
+  box.hidden = false;
+  box.scrollTop = 0;
+  els.main.textContent = "Continue";
+}
+
+function updateDue() {
+  const n = dueIds().length;
+  els.due.textContent = n ? `${n} due` : "None due";
+}
+
+/* ====================== flow ====================== */
+function next() {
+  const ex = nextExercise();
+  if (!ex) {
+    showMessage("Nothing to practise", "The vocabulary file has no forms with answers to ask about.");
+    return;
+  }
+  current = ex;
+  lastKey = ex.key;
+  renderAsk();
+  els.main.focus({ preventScroll: true });
+}
+
+function reveal() {
+  if (!current || current.revealed) return;
+  current.revealed = true;
+  renderReveal();
+}
+
+function finish() {
+  if (!current || !current.revealed) return;
+  const t = Date.now();
+  for (const e of current.entries) {          // one record per word, so each word is scheduled on its own
+    const review = {
+      t, l: e.lex.id, f: current.text,
+      s: e.targets.map((x) => x.local),
+      m: e.targets.filter((x) => x.missed).map((x) => x.local)
+    };
+    log.push(review);
+    applyReview(state, review);
+  }
+  save("log", log);
+  if (!persistAsked && navigator.storage && navigator.storage.persist) {
+    persistAsked = true;
+    navigator.storage.persist().catch(() => {});
+  }
+  next();
+}
+
+els.main.addEventListener("click", () => { if (current) (current.revealed ? finish() : reveal()); });
+els.skip.addEventListener("click", () => { if (current) next(); });   // skip records nothing
+
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || els.dlg.open || !current) return;
+  if (e.target.closest && e.target.closest("input, textarea")) return;
+  if (e.key === "s" || e.key === "S") { e.preventDefault(); els.skip.click(); }
+  else if ((e.key === " " || e.key === "Enter") && document.activeElement === document.body) {
+    e.preventDefault(); els.main.click();
+  } else if (current.revealed && /^[1-9]$/.test(e.key)) {
+    const t = current.targets[Number(e.key) - 1];
+    if (t && t.toggle) t.toggle();
+  }
+});
+
+/* ====================== menu: statistics, settings, data, about ====================== */
+function describe(id) {
+  const [lexId, local] = splitId(id);
+  const lex = byId.get(lexId);
+  if (!lex) return null;
+  if (local.startsWith("pp/")) {
+    const p = lex.parts.find((x) => x.key === local.slice(3));
+    return p ? `${p.text} (${lex.lemma})` : null;
+  }
+  if (local.startsWith("form/")) {
+    const [, text, pos, tag] = local.split("/");
+    const label = tag ? tagLabel(tag) : posLabel(pos);
+    return `${text}: ${pos && tag ? posLabel(pos) + ", " : ""}${label}`;
+  }
+  if (local.startsWith("meaning/")) return `${local.slice(8)} (${lex.lemma})`;
+  return null;
+}
+
+function openMenu() {
+  const now = Date.now();
+  let ok = 0, bad = 0;
+  for (const r of log.slice(-200)) { bad += r.m.length; ok += r.s.length - r.m.length; }
+  const rate = (s) => s.miss / (s.ok + s.miss);
+  const weakest = Object.entries(state)
+    .filter(([id, s]) => s.miss > 0 && s.ok + s.miss >= 2 && describe(id))
+    .sort((a, b) => rate(b[1]) - rate(a[1]) || b[1].miss - a[1].miss)
+    .slice(0, 5);
+  const stat = (v, l) => h("div", { class: "stat" }, h("b", {}, String(v)), h("span", {}, l));
+  const status = h("p", { class: "status", role: "status", "aria-live": "polite" });
+
+  const seg = (options, value, onPick) => h("div", { class: "seg" }, options.map(([v, label]) =>
+    h("button", { type: "button", "aria-pressed": String(v === value), onclick: (e) => {
+      onPick(v);
+      e.currentTarget.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      e.currentTarget.setAttribute("aria-pressed", "true");
+    } }, label)));
+
+  const fileInput = h("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: importProgress });
+
+  function importProgress() {
+    const file = fileInput.files[0];
+    if (!file) return;
+    file.text().then((txt) => {
+      const obj = JSON.parse(txt);
+      if (!obj || !Array.isArray(obj.log)) throw new Error("not a progress file");
+      const seen = new Set(log.map((r) => `${r.t}|${r.l}|${r.f}`));
+      let added = 0;
+      for (const r of obj.log) {
+        if (!r || typeof r.t !== "number" || !Array.isArray(r.s) || !Array.isArray(r.m)) continue;
+        const k = `${r.t}|${r.l}|${r.f}`;
+        if (!seen.has(k)) { seen.add(k); log.push(r); added++; }
+      }
+      save("log", log);
+      rebuildState();
+      updateDue();
+      status.textContent = `Imported ${added} new review${added === 1 ? "" : "s"}.`;
+    }).catch(() => { status.textContent = "That file isn't a valid progress export."; })
+      .finally(() => { fileInput.value = ""; });
+  }
+
+  function exportProgress() {
+    const blob = new Blob([JSON.stringify({ app: "latin-trainer", version: 1, exportedAt: new Date().toISOString(), log })],
+      { type: "application/json" });
+    const a = h("a", { href: URL.createObjectURL(blob), download: `latin-trainer-progress-${new Date().toISOString().slice(0, 10)}.json` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    status.textContent = `Exported ${log.length} review${log.length === 1 ? "" : "s"}.`;
+  }
+
+  function resetProgress() {
+    if (!confirm("Delete all progress on this device? This cannot be undone.")) return;
+    log = []; save("log", log); rebuildState(); updateDue();
+    status.textContent = "Progress deleted.";
+  }
+
+  const dlg = els.dlg;
+  dlg.replaceChildren(h("div", { class: "dlg" },
+    h("div", { class: "dlg-head" }, h("h2", {}, "Latin Trainer"),
+      h("button", { class: "dbtn", type: "button", onclick: () => dlg.close() }, "Close")),
+
+    h("h3", {}, "Statistics"),
+    h("div", { class: "stats" },
+      stat(log.length, "Exercises graded"),
+      stat(dueIds(now).length, "Items due now"),
+      stat(Object.keys(state).length, "Items tracked"),
+      stat(ok + bad ? Math.round((100 * ok) / (ok + bad)) + "%" : "–", "Correct, last 200 exercises")),
+    h("h3", {}, "Weakest items"),
+    weakest.length
+      ? h("ul", { class: "weak" }, weakest.map(([id, s]) =>
+          h("li", {}, h("span", {}, describe(id)), h("span", {}, `${s.miss} of ${s.ok + s.miss} missed`))))
+      : h("p", { class: "small" }, "Nothing yet. Items appear here once you have missed one at least once."),
+
+    h("h3", {}, "Settings"),
+    h("div", { class: "row" }, h("span", {}, "Items per question"),
+      seg([[3, "3"], [5, "5"], [8, "8"]], settings.targets, (v) => { settings.targets = v; save("settings", settings); })),
+    h("div", { class: "row", style: "margin-top:10px" }, h("span", {}, "Theme"),
+      seg([["auto", "Auto"], ["light", "Light"], ["dark", "Dark"]], settings.theme, (v) => {
+        settings.theme = v; save("settings", settings); applyTheme();
+      })),
+
+    h("h3", {}, "Your data"),
+    h("p", { class: "small" }, storageOk
+      ? "Progress is stored only in this browser. Export it to back it up or move it to another device."
+      : "Storage is blocked in this browser, so progress will be lost when you close the page."),
+    h("div", { class: "row" },
+      h("button", { class: "dbtn", type: "button", onclick: exportProgress }, "Export progress"),
+      h("button", { class: "dbtn", type: "button", onclick: () => fileInput.click() }, "Import progress"),
+      h("button", { class: "dbtn danger", type: "button", onclick: resetProgress }, "Delete progress")),
+    fileInput, status,
+
+    h("h3", {}, "About"),
+    h("p", { class: "small" }, "A spaced-repetition trainer for Latin principal parts, forms and meanings. ",
+      "Each answer is graded separately, so the items you forget come back more often."),
+    h("p", { class: "small" }, "Keys: Space or Enter reveals and continues, S skips, 1 to 9 toggles an answer."),
+    h("p", { class: "small" },
+      h("a", { href: REPO_URL, target: "_blank", rel: "noopener" }, "Source on GitHub"), " (version " + VERSION + "). Vocabulary data from ",
+      h("a", { href: "https://github.com/PedroFernandesSalgado/VulgateDict", target: "_blank", rel: "noopener" }, "VulgateDict"), ".")
+  ));
+  dlg.showModal();
+}
+
+els.menuBtn.addEventListener("click", openMenu);
+els.due.addEventListener("click", openMenu);
+els.dlg.addEventListener("click", (e) => { if (e.target === els.dlg) els.dlg.close(); });
+els.dlg.addEventListener("close", () => { updateDue(); if (current && current.targets && !current.revealed) els.main.focus({ preventScroll: true }); });
+
+function applyTheme() {
+  if (settings.theme === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = settings.theme;
+}
+
+/* ====================== start ====================== */
+$("#repo-link").href = REPO_URL;
+applyTheme();
+rebuildState();
+updateDue();
+
+fetch(DATA_URL)
+  .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+  .then((data) => {
+    byId = new Map(data.lexemes.map((l) => [l.id, l]));
+    byForm = new Map();
+    for (const lex of data.lexemes)
+      for (const form of lex.forms) {
+        const list = byForm.get(form.text);
+        if (list) list.push({ lex, form }); else byForm.set(form.text, [{ lex, form }]);
+      }
+    candidates = data.lexemes.filter((l) => l.forms.length);
+    rebuildState();
+    next();
+  })
+  .catch((err) => {
+    showMessage("Couldn't load " + DATA_URL,
+      `${err.message}. If you opened index.html straight from disk, serve the folder instead, for example with "python3 -m http.server".`);
+  });
+})();
+</script>
+</body>
+</html>
